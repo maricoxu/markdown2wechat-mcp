@@ -80,6 +80,12 @@ npx tsc -b && npm run copy-assets
 docker build -t wenyan-mcp .
 ```
 
+或者指定`npm`镜像源。
+
+```bash
+docker build --build-arg NPM_REGISTRY=https://mirrors.cloud.tencent.com/npm/ -t wenyan-mcp .
+```
+
 #### 与 MCP Client 集成
 
 在你的 MCP 配置文件中加入以下内容：

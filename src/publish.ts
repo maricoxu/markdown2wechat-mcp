@@ -106,7 +106,8 @@ async function uploadImages(content: string, accessToken: string): Promise<{ htm
 export async function publishToDraft(title: string, content: string, cover: string) {
     try {
         const accessToken = await fetchAccessToken();
-        const { html, firstImageId } = await uploadImages(content, accessToken.access_token);
+        const handledContent = content.replace(/\n<li/g, "<li").replace(/<\/li>\n/g, "<\/li>");
+        const { html, firstImageId } = await uploadImages(handledContent, accessToken.access_token);
         let thumbMediaId = "";
         if (cover) {
             const resp = await uploadImage(cover, accessToken.access_token, "cover.jpg");

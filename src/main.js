@@ -38,7 +38,7 @@ const tex = new TeX(texConfig);
 const svg = new SVG(svgConfig);
 
 function addContainer(math, doc) {
-    console.log(math)
+    // console.log(math)
     const tag = math.display ? 'section' : 'span';
     const cls = math.display ? 'block-equation' : 'inline-equation';
     // math.typesetRoot.setAttribute("math", math.math);
