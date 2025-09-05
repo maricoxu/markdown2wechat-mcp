@@ -27,7 +27,39 @@ https://github.com/user-attachments/assets/2c355f76-f313-48a7-9c31-f0f69e5ec207
 
 ## 使用方式
 
-### 方式一：本地运行
+### 方式一：本地安装（推荐）
+
+```
+npm install -g @wenyan-md/mcp
+```
+
+#### 与 MCP Client 集成
+
+在你的 MCP 配置文件中加入以下内容：
+
+```json
+{
+  "mcpServers": {
+    "wenyan-mcp": {
+      "name": "公众号助手",
+      "command": "wenyan-mcp",
+      "env": {
+        "WECHAT_APP_ID": "your_app_id",
+        "WECHAT_APP_SECRET": "your_app_secret"
+      }
+    }
+  }
+}
+```
+
+> 说明：
+>
+> * `WECHAT_APP_ID` 微信公众号平台的 App ID
+> * `WECHAT_APP_SECRET` 微信平台的 App Secret
+
+---
+
+### 方式二：编译运行
 
 #### 编译
 
@@ -38,7 +70,7 @@ git clone https://github.com/caol64/wenyan-mcp.git
 cd wenyan-mcp
 
 npm install
-npx tsc -b && npm run copy-assets
+npx tsc -b
 ```
 
 #### 与 MCP Client 集成
@@ -70,7 +102,7 @@ npx tsc -b && npm run copy-assets
 
 ---
 
-### 方式二：使用 Docker 运行（推荐）
+### 方式三：使用 Docker 运行（推荐）
 
 适合部署到服务器环境，或与本地 AI 工具链集成。
 
@@ -161,7 +193,6 @@ cover: /Users/lei/Downloads/result_image.jpg
 ```md
 ---
 title: 在本地跑一个大语言模型(2) - 给模型提供外部知识库
-description: Make your local large language models (LLMs) smarter! This guide shows how to use LangChain and RAG to let them retrieve data from external knowledge bases, improving answer accuracy.
 cover: /Users/lei/Downloads/result_image.jpg
 ---
 

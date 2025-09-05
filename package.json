@@ -1,8 +1,10 @@
 {
-  "name": "wenyan-mcp",
-  "version": "0.1.0",
+  "name": "@wenyan-md/mcp",
+  "version": "1.0.3",
   "description": "MCP server for Wenyan, a Markdown formatting tool that allows AI assistants to apply elegant built-in themes and publish articles directly to 微信公众号.",
-  "private": true,
+  "author": "Lei <caol64@gmail.com> (https://github.com/caol64)",
+  "license": "Apache-2.0",
+  "keywords": ["公众号", "markdown", "文颜", "wenyan", "wechat", "publishing", "renderer", "mcp"],
   "type": "module",
   "bin": {
     "wenyan-mcp": "./dist/index.js"
@@ -11,26 +13,17 @@
     "dist"
   ],
   "scripts": {
-    "build": "tsc -b && pnpm copy-assets",
-    "copy-assets": "cp src/main.js dist/main.js && cp -r src/themes dist/themes && cp -r src/highlight dist/highlight && cp src/mac_style.css dist/mac_style.css",
+    "build": "tsc",
     "watch": "tsc --watch",
     "inspector": "pnpx @modelcontextprotocol/inspector",
-    "test": "pnpx vitest run"
+    "test": "pnpx vitest run",
+    "prepublishOnly": "pnpm build"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "0.6.0",
-    "css-tree": "^3.1.0",
-    "formdata-node": "^6.0.3",
-    "front-matter": "^4.0.2",
-    "highlight.js": "^11.11.1",
-    "jsdom": "^26.1.0",
-    "marked": "^15.0.12",
-    "marked-highlight": "^2.2.1",
-    "mathjax-full": "^3.2.2"
+    "@wenyan-md/core": "^1.0.3"
   },
   "devDependencies": {
-    "@types/css-tree": "^2.3.10",
-    "@types/jsdom": "^21.1.7",
     "@types/node": "^20.11.24",
     "typescript": "^5.3.3",
     "vitest": "^3.2.3"

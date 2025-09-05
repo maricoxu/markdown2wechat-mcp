@@ -15,10 +15,9 @@ import {
     CallToolRequestSchema,
     ListToolsRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
-import { Theme, themes } from "./theme.js";
-// @ts-ignore
-import { initMarkdownRenderer, renderMarkdown, handleFrontMatter } from "./main.js";
-import { publishToDraft } from "./publish.js";
+import { getGzhContent } from "@wenyan-md/core/wrapper";
+import { publishToDraft } from "@wenyan-md/core/publish";
+import { themes, Theme } from "@wenyan-md/core/theme";
 
 /**
  * Create an MCP server with capabilities for resources (to list/read notes),
@@ -38,8 +37,6 @@ const server = new Server(
         },
     }
 );
-
-initMarkdownRenderer();
 
 /**
  * Handler that lists available tools.
@@ -93,27 +90,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         // });
         const content = String(request.params.arguments?.content || "");
         const themeId = String(request.params.arguments?.theme_id || "");
-        let theme: Theme | undefined = themes["default"];
-        if (themeId) {
-            theme = themes[themeId];
-            if (!theme) {
-                theme = Object.values(themes).find(
-                    theme => theme.name.toLowerCase() === themeId.toLowerCase()
-                );
-            }
-        }
-
-        if (!theme) {
-            throw new Error("Invalid theme ID");
-        }
-        // console.log(markdown);
-        const preHandlerContent = handleFrontMatter(content);
-
-        const html = await renderMarkdown(preHandlerContent.body, theme.id);
-        // console.log(html);
-        const title = preHandlerContent.title ?? "this is title";
-        const cover = preHandlerContent.cover ?? "";
-        const response = await publishToDraft(title, html, cover);
+        const gzhContent = await getGzhContent(content, themeId, "solarized-light", true);
+        const title = gzhContent.title ?? "this is title";
+        const cover = gzhContent.cover ?? "";
+        const response = await publishToDraft(title, gzhContent.content, cover);
 
         return {
             content: [
@@ -124,10 +104,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             ],
         };
     } else if (request.params.name === "list_themes") {
-        const themeResources = Object.entries(themes).map(([id, theme]) => ({
+        const themeResources = Object.entries(themes).map(([id, theme]: [string, Theme]) => ({
             type: "text",
             text: JSON.stringify({
-                id: id,
+                id: theme.id,
                 name: theme.name,
                 description: theme.description
             }),
