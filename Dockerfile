@@ -10,5 +10,5 @@ COPY tsconfig.json ./
 COPY src ./src
 RUN npm install --production
 RUN npm install typescript
-RUN npx tsc -b
+RUN npx tsc
 CMD ["node", "dist/index.js"]
