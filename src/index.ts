@@ -90,7 +90,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         // });
         const content = String(request.params.arguments?.content || "");
         const themeId = String(request.params.arguments?.theme_id || "");
-        const gzhContent = await getGzhContent(content, themeId, "solarized-light", true);
+        const gzhContent = await getGzhContent(content, themeId, "solarized-light", true, true);
         const title = gzhContent.title ?? "this is title";
         const cover = gzhContent.cover ?? "";
         const response = await publishToDraft(title, gzhContent.content, cover);
