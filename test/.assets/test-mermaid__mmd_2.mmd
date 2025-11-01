@@ -1,0 +1,10 @@
+classDiagram
+    class MermaidRenderer {
+        +convertMermaid()
+        +renderWithLocal()
+        +renderWithKroki()
+    }
+    class HandDrawnConverter {
+        +convertSvgToHandDrawn()
+    }
+    MermaidRenderer --> HandDrawnConverter

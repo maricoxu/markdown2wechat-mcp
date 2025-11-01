@@ -1,0 +1,58 @@
+---
+title: "Mermaid 渲染测试文档"
+summary: "测试 mermaid 代码块转图片功能"
+tags: ["test", "mermaid"]
+cover: "https://example.com/cover.jpg"
+---
+
+# Mermaid 渲染功能测试
+
+这是一个用于测试 `convert_mermaid` 工具的示例文档，包含多个 mermaid 图表。
+
+## 1. 流程图 (Flowchart)
+
+![mermaid-1](.assets/test-mermaid__mmd_0.png)
+
+
+
+## 2. 时序图 (Sequence Diagram)
+
+![mermaid-2](.assets/test-mermaid__mmd_1.png)
+
+
+
+## 3. 类图 (Class Diagram)
+
+![mermaid-3](.assets/test-mermaid__mmd_2.png)
+
+
+
+## 4. 状态图 (State Diagram)
+
+![mermaid-4](.assets/test-mermaid__mmd_3.png)
+
+
+
+## 5. 甘特图 (Gantt Chart)
+
+![mermaid-5](.assets/test-mermaid__mmd_4.png)
+
+
+
+## 6. 饼图 (Pie Chart)
+
+![mermaid-6](.assets/test-mermaid__mmd_5.png)
+
+
+
+## 测试说明
+
+本文档包含 6 个不同类型的 mermaid 图表：
+1. 流程图 - 展示基本的决策流程
+2. 时序图 - 展示组件交互
+3. 类图 - 展示类关系
+4. 状态图 - 展示状态转换
+5. 甘特图 - 展示项目排期
+6. 饼图 - 展示时间分配
+
+转换后，所有 mermaid 代码块应该被替换为图片引用。

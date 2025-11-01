@@ -1,0 +1,85 @@
+---
+title: "Mermaid 渲染测试文档"
+summary: "测试 mermaid 代码块转图片功能"
+tags: ["test", "mermaid"]
+cover: "https://example.com/cover.jpg"
+---
+
+# Mermaid 渲染功能测试
+
+这是一个用于测试 `convert_mermaid` 工具的示例文档，包含多个 mermaid 图表。
+
+## 1. 流程图 (Flowchart)
+
+![mermaid-1](.assets/test-mermaid__mmd_0.png)
+
+## 2. 时序图 (Sequence Diagram)
+
+```mermaid
+sequenceDiagram
+    participant 用户
+    participant MCP工具
+    participant Mermaid-CLI
+    participant 文件系统
+
+    用户->>MCP工具: 调用 convert_mermaid
+    MCP工具->>文件系统: 读取 Markdown 文件
+    MCP工具->>MCP工具: 解析 mermaid 代码块
+    loop 每个代码块
+        MCP工具->>Mermaid-CLI: 渲染图表
+        Mermaid-CLI->>文件系统: 保存 PNG 图片
+        Mermaid-CLI-->>MCP工具: 返回结果
+    end
+    MCP工具->>文件系统: 更新 Markdown 文件
+    MCP工具-->>用户: 返回图片列表
+```
+
+## 3. 类图 (Class Diagram)
+
+![mermaid-2](.assets/test-mermaid__mmd_1.png)
+
+## 4. 状态图 (State Diagram)
+
+```mermaid
+stateDiagram-v2
+    [*] --> 待处理
+    待处理 --> 转换中: 开始转换
+    转换中 --> 渲染图片: 检测到 mermaid
+    渲染图片 --> 上传COS: 图片生成完成
+    上传COS --> 回写链接: 上传成功
+    回写链接 --> 发布草稿: 链接更新完成
+    发布草稿 --> [*]: 发布成功
+    
+    转换中 --> 失败: 出错
+    渲染图片 --> 失败: 渲染失败
+    上传COS --> 失败: 上传失败
+    失败 --> [*]
+```
+
+## 5. 甘特图 (Gantt Chart)
+
+![mermaid-3](.assets/test-mermaid__mmd_2.png)
+
+## 6. 饼图 (Pie Chart)
+
+```mermaid
+pie title 项目时间分配
+    "配置管理" : 15
+    "Mermaid 渲染" : 25
+    "图片处理" : 30
+    "Pipeline 串联" : 20
+    "测试与文档" : 10
+```
+
+## 测试说明
+
+本文档包含 6 个不同类型的 mermaid 图表：
+1. 流程图 - 展示基本的决策流程
+2. 时序图 - 展示组件交互
+3. 类图 - 展示类关系
+4. 状态图 - 展示状态转换
+5. 甘特图 - 展示项目排期
+6. 饼图 - 展示时间分配
+
+转换后，所有 mermaid 代码块应该被替换为图片引用。
+

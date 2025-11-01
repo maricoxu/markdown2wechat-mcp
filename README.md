@@ -31,6 +31,11 @@ https://github.com/user-attachments/assets/2c355f76-f313-48a7-9c31-f0f69e5ec207
 - 使用内置主题对 Markdown 内容排版
 - 发布文章到微信公众号草稿箱
 - 自动上传本地或网络图片
+- **✨ 新增功能**：
+  - **Mermaid 图表渲染**: 自动将 Markdown 中的 Mermaid 代码块转换为图片
+  - **手绘风格转换**: 支持将图表转换为 Excalidraw 风格的手绘效果
+  - **图片自动上传**: 支持将本地图片上传到腾讯云 COS
+  - **完整 Pipeline**: 一键完成 mermaid 转换 → 图片上传 → 主题渲染 → 发布
 
 ## 主题效果
 
@@ -82,17 +87,116 @@ npm install -g @wenyan-md/mcp
 
 ### 方式二：编译运行
 
-#### 编译
+#### 环境要求
 
-确保已安装 [Node.js](https://nodejs.org/) 环境：
+- **Node.js**: >= 18.0.0
+- **包管理器**: pnpm >= 10.7.1 (推荐) 或 npm/yarn
+- **系统依赖**: 
+  - macOS/Linux: 支持命令行环境
+  - Windows: 需要 WSL 或 Git Bash
 
+#### 安装步骤
+
+1. **克隆项目**
 ```bash
 git clone https://github.com/caol64/wenyan-mcp.git
 cd wenyan-mcp
-
-npm install
-npx tsc -b
 ```
+
+2. **安装基础依赖**
+```bash
+# 使用 pnpm (推荐)
+pnpm install
+
+# 或使用 npm
+npm install
+```
+
+3. **安装开发依赖（包含 Mermaid CLI）**
+```bash
+# 开发依赖已包含在 package.json 中，安装时会自动安装
+# 包括：
+# - @mermaid-js/mermaid-cli: Mermaid 图表渲染
+# - puppeteer: SVG 转 PNG（用于手绘风格文字渲染）
+# - jsdom: SVG DOM 操作
+# - sharp: 图片处理
+# - roughjs: 手绘风格转换
+```
+
+4. **安装 Puppeteer 的 Chrome 浏览器（可选，推荐）**
+   
+   如果你需要使用手绘风格功能并且希望文字正确显示，需要安装 Chrome：
+
+```bash
+# 安装 Puppeteer 的 Chrome 浏览器
+npx puppeteer browsers install chrome
+```
+
+   > **注意**：如果不安装 Chrome，手绘风格的图片仍可以生成，但文字可能会丢失（会回退到 Sharp 渲染）。
+
+5. **验证安装**
+```bash
+# 检查 mermaid-cli
+npx mmdc --version
+
+# 检查 Puppeteer (如果已安装)
+node -e "require('puppeteer').launch().then(b => {b.close(); console.log('Puppeteer OK')}).catch(e => console.log('Puppeteer:', e.message))"
+```
+
+6. **编译 TypeScript**
+```bash
+pnpm build
+# 或
+npm run build
+```
+
+#### 项目依赖说明
+
+**生产依赖 (dependencies)**:
+- `@modelcontextprotocol/sdk`: MCP 协议支持
+- `@wenyan-md/core`: 文颜核心库
+- `cos-nodejs-sdk-v5`: 腾讯云 COS SDK（图片上传）
+- `dotenv`: 环境变量管理
+- `remark`, `remark-gfm`: Markdown 解析
+- `roughjs`: 手绘风格生成库
+- `sharp`: 高性能图片处理（SVG/PNG/JPG 转换）
+- `unified`: Markdown 处理框架
+- `zod`: 配置验证
+
+**开发依赖 (devDependencies)**:
+- `@mermaid-js/mermaid-cli`: Mermaid 图表渲染 CLI 工具
+- `@types/jsdom`, `@types/node`: TypeScript 类型定义
+- `jsdom`: SVG DOM 操作和解析
+- `puppeteer`: 浏览器自动化（用于手绘风格文字渲染）
+- `typescript`: TypeScript 编译器
+- `vitest`: 单元测试框架
+
+#### 依赖安装说明
+
+**关键依赖的作用**:
+
+1. **@mermaid-js/mermaid-cli**: 
+   - 将 Mermaid 代码渲染为 SVG/PNG
+   - 必须安装，用于 `convert_mermaid` 功能
+
+2. **puppeteer**: 
+   - 用于手绘风格功能中的文字渲染
+   - 可选，但不安装时文字可能丢失
+   - 安装 Chrome: `npx puppeteer browsers install chrome`
+
+3. **sharp**: 
+   - SVG 转 PNG/JPG
+   - 高性能图片处理
+   - 自动安装
+
+4. **roughjs**: 
+   - 生成手绘风格效果
+   - 自动安装
+
+5. **jsdom**: 
+   - 解析和操作 SVG DOM
+   - 用于手绘风格转换
+   - 自动安装
 
 #### 与 MCP Client 集成
 
@@ -249,6 +353,195 @@ npx @modelcontextprotocol/inspector
 ## 赞助
 
 如果您觉得这个项目不错，可以给我家猫咪买点罐头吃。[喂猫❤️](https://yuzhi.tech/sponsor)
+
+## 新增功能详细说明
+
+### 1. Mermaid 图表渲染 (`convert_mermaid`)
+
+自动识别 Markdown 中的 mermaid 代码块，渲染为 PNG/JPG 图片并替换为图片引用。
+
+**前置要求**:
+- 已安装 `@mermaid-js/mermaid-cli`（开发依赖中已包含）
+- 验证安装: `npx mmdc --version`
+
+**使用示例**:
+```json
+{
+  "tool": "convert_mermaid",
+  "arguments": {
+    "filePath": "/absolute/path/to/file.md",
+    "format": "png",
+    "scale": 1.5,
+    "background": "#ffffff"
+  }
+}
+```
+
+详细文档: [docs/MERMAID_GUIDE.md](docs/MERMAID_GUIDE.md)
+
+### 2. 手绘风格转换
+
+将 Mermaid 图表转换为手绘风格（类似 Excalidraw 效果）。
+
+**前置要求**:
+- 已安装 `roughjs`, `sharp`, `jsdom`（已包含在依赖中）
+- **推荐**: 安装 Puppeteer 的 Chrome 浏览器以正确显示文字
+  ```bash
+  npx puppeteer browsers install chrome
+  ```
+
+**特性**:
+- 自动应用手绘风格到所有图形元素
+- 保留原有颜色和样式
+- 支持自定义粗糙度和填充样式
+
+详细文档: [docs/HAND_DRAWN_IMPLEMENTATION.md](docs/HAND_DRAWN_IMPLEMENTATION.md)
+
+### 3. 图片上传到 COS (`image_upload_cos`)
+
+自动收集 Markdown 中的本地图片，上传到腾讯云 COS，并替换为 COS URL。
+
+**前置要求**:
+- 配置腾讯云 COS 环境变量：
+  ```env
+  COS_SECRET_ID=your_secret_id
+  COS_SECRET_KEY=your_secret_key
+  COS_REGION=ap-guangzhou
+  COS_BUCKET=your_bucket_name
+  ```
+
+**详细配置指南**: 📖 [腾讯云 COS 申请与配置指南](docs/COS_SETUP_GUIDE.md)
+
+### 4. 完整发布 Pipeline (`publish_wechat`)
+
+一键完成所有处理步骤：
+1. Mermaid 转换（可选）
+2. 图片上传到 COS（可选）
+3. 主题渲染
+4. 发布到微信公众号
+
+**使用示例**:
+```json
+{
+  "tool": "publish_wechat",
+  "arguments": {
+    "filePath": "/path/to/article.md",
+    "theme": "orangeheart",
+    "runPipeline": {
+      "convertMermaid": true,
+      "uploadImages": true
+    }
+  }
+}
+```
+
+## 快速开始 - 完整安装指南
+
+### 步骤 1: 克隆项目
+```bash
+git clone https://github.com/caol64/wenyan-mcp.git
+cd wenyan-mcp
+```
+
+### 步骤 2: 安装 Node.js 依赖
+```bash
+# 使用 pnpm (推荐)
+pnpm install
+
+# 或使用 npm
+npm install
+```
+
+### 步骤 3: 安装 Mermaid CLI（验证）
+```bash
+# 验证是否已安装（开发依赖中已包含）
+npx mmdc --version
+
+# 如果未安装，会通过 npx 自动下载使用
+```
+
+### 步骤 4: 安装 Puppeteer Chrome（推荐，用于手绘风格文字渲染）
+```bash
+# 安装 Chrome 浏览器（约 200MB）
+npx puppeteer browsers install chrome
+```
+
+> **注意**: 如果不安装，手绘风格功能仍可使用，但文字可能无法显示（会使用 Sharp 作为回退方案）。
+
+### 步骤 5: 编译项目
+```bash
+pnpm build
+```
+
+### 步骤 6: 配置环境变量
+
+创建 `.env` 文件：
+
+```env
+# 微信公众号配置（必需）
+WECHAT_APP_ID=your_app_id
+WECHAT_APP_SECRET=your_app_secret
+
+# 腾讯云 COS 配置（图片上传功能需要，可选）
+COS_SECRET_ID=your_cos_secret_id
+COS_SECRET_KEY=your_cos_secret_key
+COS_REGION=ap-guangzhou
+COS_BUCKET=your_bucket_name
+
+# Mermaid 配置（可选）
+MERMAID_ENGINE=local
+MERMAID_SCALE=1.5
+MERMAID_BACKGROUND=#ffffff
+MERMAID_FORMAT=png
+```
+
+### 步骤 7: 验证安装
+
+```bash
+# 运行测试
+pnpm test
+
+# 或手动测试 Mermaid 转换
+node test/run-convert-mermaid.js
+```
+
+## 常见问题
+
+### Q: Puppeteer 安装 Chrome 失败怎么办？
+
+**解决方案**:
+1. 检查网络连接（需要下载约 200MB）
+2. 使用代理或镜像：
+   ```bash
+   export PUPPETEER_DOWNLOAD_HOST=https://npmmirror.com/mirrors
+   npx puppeteer browsers install chrome
+   ```
+3. 如果不安装，代码会自动回退到 Sharp（图形可见，文字可能丢失）
+
+### Q: mermaid-cli 命令找不到？
+
+**已自动处理**：代码会优先尝试 `mmdc`，失败后自动使用 `npx @mermaid-js/mermaid-cli`。
+
+### Q: 手绘风格图片没有文字？
+
+**原因**: Puppeteer 的 Chrome 未安装或渲染失败，回退到了 Sharp。
+
+**解决方案**:
+```bash
+# 安装 Chrome
+npx puppeteer browsers install chrome
+
+# 验证
+node -e "require('puppeteer').launch().then(b => {b.close(); console.log('OK')})"
+```
+
+### Q: 图片上传到 COS 失败？
+
+检查环境变量配置：
+- `COS_SECRET_ID`
+- `COS_SECRET_KEY`
+- `COS_REGION`
+- `COS_BUCKET`
 
 ## License
 

@@ -1,0 +1,9 @@
+sequenceDiagram
+    participant A as 用户
+    participant B as AI助手
+    participant C as 系统
+    
+    A->>B: 请求转换Mermaid
+    B->>C: 调用mermaid-cli
+    C-->>B: 返回图片
+    B-->>A: 返回结果
