@@ -273,9 +273,11 @@ export async function convertMermaid(options: ConvertMermaidOptions): Promise<Co
         localPath: outputPath,
       });
     } catch (error: any) {
-      logger.error(`渲染 mermaid 图表 ${i + 1} 失败: ${error.message}`);
+      logger.error(`渲染 mermaid 图表 ${i + 1}/${mermaidBlocks.length} 失败: ${error.message}`);
+      logger.error(`错误详情: ${error.stack || error}`);
       // 即使渲染失败，也记录替换信息（使用占位符或保留原代码块）
       // 这样可以确保流程继续，但用户会看到原代码块而不是图片
+      // 注意：渲染失败的图表不会被替换，保留原代码块，所以不会添加到replacements中
       // 继续处理其他图表，不中断整个流程
     }
   }

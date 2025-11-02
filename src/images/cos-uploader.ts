@@ -110,7 +110,7 @@ export async function uploadImageToCos(options: CosUploadOptions): Promise<CosUp
       // 如果文件已存在，直接返回 URL
       const baseUrl = cosConfig.baseUrl.replace(/\/$/, "");
       const key = cosKey.replace(/^\//, "");
-      // 对 key 进行 URL 编码（保留斜杠用于路径分隔）
+      // 生成访问 URL：对路径的每一段进行 URL 编码，但保留路径分隔符
       const encodedKey = key.split('/').map(segment => encodeURIComponent(segment)).join('/');
       const existingUrl = `${baseUrl}/${encodedKey}`;
       logger.info(`[上传] 文件已存在，跳过上传: ${basename(localPath)}`);
@@ -147,14 +147,15 @@ export async function uploadImageToCos(options: CosUploadOptions): Promise<CosUp
         // 确保 baseUrl 末尾没有斜杠，cosKey 前面没有斜杠
         const baseUrl = cosConfig.baseUrl.replace(/\/$/, "");
         const key = cosKey.replace(/^\//, ""); // 确保 key 前面没有斜杠
-        // 对 key 进行 URL 编码（保留斜杠用于路径分隔）
-        // 注意：COS SDK 的 Key 参数使用原始字符串，但访问 URL 需要编码
+        
+        // 生成访问 URL：对路径的每一段进行 URL 编码，但保留路径分隔符
+        // COS SDK 的 Key 参数使用原始字符串，但浏览器访问 URL 需要编码
         const encodedKey = key.split('/').map(segment => encodeURIComponent(segment)).join('/');
         const url = `${baseUrl}/${encodedKey}`;
         
         logger.info(`[上传] ✅ 上传成功！`);
-        logger.info(`[上传] COS Key (原始): ${cosKey}`);
-        logger.info(`[上传] COS Key (编码后用于 URL): ${encodedKey}`);
+        logger.info(`[上传] COS Key (上传时，原始): ${cosKey}`);
+        logger.info(`[上传] COS Key (访问URL，编码后): ${encodedKey}`);
         logger.info(`[上传] 最终 URL: ${url}`);
         logger.info(`[上传] 验证: 请在浏览器中访问此 URL 确认文件存在`);
 
