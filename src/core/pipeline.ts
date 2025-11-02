@@ -49,11 +49,14 @@ export async function executePipeline(options: PipelineOptions): Promise<Pipelin
         ...mermaidOptions,
       });
       context.mermaidImages = mermaidResult.images;
-      logger.info(`已转换 ${mermaidResult.images.length} 个 Mermaid 图表`);
+      logger.info(`已转换 ${mermaidResult.images.length} 个 Mermaid 图表，文件已更新`);
     } catch (error: any) {
       logger.error(`Mermaid 转换失败: ${error.message}`);
+      logger.error(`错误堆栈: ${error.stack}`);
       context.errors.push({ step: "convertMermaid", error });
     }
+  } else {
+    logger.info("步骤 1: 跳过 Mermaid 转换（未启用 convertMermaid）");
   }
 
   // 步骤 2: 收集所有本地图片（包括 mermaid 生成的图片）

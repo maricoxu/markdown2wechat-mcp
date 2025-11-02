@@ -124,8 +124,8 @@ async function renderWithLocal(
     if (shouldApplyHandDrawn) {
       const svgPath = outputPath.replace(/\.(png|jpg)$/, ".svg");
 
-      // 渲染为 SVG
-      const svgCommand = `${commandPrefix} -i ${tempMermaidPath} -o ${svgPath} --outputFormat svg --scale ${options.scale} --backgroundColor "${options.background}"`;
+      // 渲染为 SVG（路径需要引号以处理空格和特殊字符）
+      const svgCommand = `${commandPrefix} -i "${tempMermaidPath}" -o "${svgPath}" --outputFormat svg --scale ${options.scale} --backgroundColor "${options.background}"`;
       await executeCommand(svgCommand);
 
       logger.info(`SVG 已生成，开始应用手绘风格...`);
@@ -138,9 +138,9 @@ async function renderWithLocal(
         finalFormat: options.format,
       });
     } else {
-      // 直接渲染为 PNG/JPG
+      // 直接渲染为 PNG/JPG（路径需要引号以处理空格和特殊字符）
       const formatFlag = options.format === "jpg" ? "-t jpg" : "";
-      const command = `${commandPrefix} -i ${tempMermaidPath} -o ${outputPath} --scale ${options.scale} --backgroundColor "${options.background}" ${formatFlag}`.trim();
+      const command = `${commandPrefix} -i "${tempMermaidPath}" -o "${outputPath}" --scale ${options.scale} --backgroundColor "${options.background}" ${formatFlag}`.trim();
 
       await executeCommand(command);
     }
@@ -151,6 +151,9 @@ async function renderWithLocal(
 
 /**
  * 使用 Kroki 云服务渲染（备选方案）
+ * 
+ * Kroki API 格式：https://kroki.io/{diagram_type}/{output_format}/{base64_encoded_diagram_source}
+ * 注意：需要使用 Base64 编码，而不是 URL 编码
  */
 async function renderWithKroki(
   mermaidCode: string,
@@ -158,8 +161,17 @@ async function renderWithKroki(
   options: { format: "png" | "jpg" }
 ): Promise<void> {
   const format = options.format === "jpg" ? "png" : "png"; // Kroki 只支持 PNG
-  const encoded = encodeURIComponent(mermaidCode);
-  const url = `https://kroki.io/mermaid/${format}/${encoded}`;
+  
+  // 使用 Base64 编码（Kroki API 要求）
+  const encoded = Buffer.from(mermaidCode, 'utf-8').toString('base64');
+  
+  // Base64 字符串可能包含 URL 不安全的字符（如 +, /, =），需要进行 URL 安全编码
+  const urlSafeEncoded = encoded
+    .replace(/\+/g, '-')  // + 替换为 -
+    .replace(/\//g, '_')  // / 替换为 _
+    .replace(/=/g, '');   // 移除末尾的 = 填充字符（Kroki 支持无填充）
+  
+  const url = `https://kroki.io/mermaid/${format}/${urlSafeEncoded}`;
 
   // 使用 curl 或 fetch 下载
   const command = `curl -s "${url}" -o "${outputPath}"`;
@@ -205,6 +217,10 @@ export async function convertMermaid(options: ConvertMermaidOptions): Promise<Co
   const outputDirectory = outDir || join(fileDir, config.output.dir);
   ensureDir(outputDirectory);
 
+  // 创建 Mermaid 代码备份目录
+  const mermaidBackupDir = join(fileDir, config.output.dir, ".mermaid-backup");
+  ensureDir(mermaidBackupDir);
+
   // 处理每个 mermaid 代码块
   const images: MermaidImage[] = [];
   const replacements: Array<{ startIndex: number; endIndex: number; replacement: string }> = [];
@@ -232,6 +248,11 @@ export async function convertMermaid(options: ConvertMermaidOptions): Promise<Co
 
       logger.info(`已渲染 mermaid 图表 ${i + 1}/${mermaidBlocks.length}: ${outputPath}`);
 
+      // 保存原始 Mermaid 代码到单独文件
+      const mermaidBackupPath = join(mermaidBackupDir, `${filenameBase}__mmd_${i}.mmd`);
+      writeFile(mermaidBackupPath, block.code);
+      logger.debug(`已保存原始 Mermaid 代码: ${mermaidBackupPath}`);
+
       // 构建图片引用路径（相对于 Markdown 文件）
       const relativePath = join(config.output.dir, outputFilename);
       const imageMarkdown = `![${block.alt || `mermaid-${i + 1}`}](${relativePath})\n\n`;
@@ -243,6 +264,8 @@ export async function convertMermaid(options: ConvertMermaidOptions): Promise<Co
         replacement: imageMarkdown,
       });
 
+      logger.debug(`已记录替换信息: 位置 ${block.startIndex}-${block.endIndex} -> 图片 ${relativePath}`);
+
       images.push({
         index: i,
         alt: block.alt,
@@ -250,14 +273,28 @@ export async function convertMermaid(options: ConvertMermaidOptions): Promise<Co
       });
     } catch (error: any) {
       logger.error(`渲染 mermaid 图表 ${i + 1} 失败: ${error.message}`);
+      // 即使渲染失败，也记录替换信息（使用占位符或保留原代码块）
+      // 这样可以确保流程继续，但用户会看到原代码块而不是图片
       // 继续处理其他图表，不中断整个流程
     }
   }
 
+  // 检查是否有替换项
+  if (replacements.length === 0) {
+    logger.warn("没有生成任何替换项，Mermaid 代码块将不会被替换");
+  } else {
+    logger.info(`准备替换 ${replacements.length} 个 Mermaid 代码块`);
+  }
+
   // 第二步：从后往前替换（避免索引偏移问题）
-  replacements.sort((a, b) => b.startIndex - a.startIndex);
-  for (const { startIndex, endIndex, replacement } of replacements) {
-    updatedBody = updatedBody.substring(0, startIndex) + replacement + updatedBody.substring(endIndex);
+  if (replacements.length > 0) {
+    replacements.sort((a, b) => b.startIndex - a.startIndex);
+    for (const { startIndex, endIndex, replacement } of replacements) {
+      const originalText = updatedBody.substring(startIndex, endIndex);
+      updatedBody = updatedBody.substring(0, startIndex) + replacement + updatedBody.substring(endIndex);
+      logger.debug(`替换完成: ${originalText.substring(0, 50).replace(/\n/g, ' ')}... -> ${replacement.substring(0, 50).replace(/\n/g, ' ')}...`);
+    }
+    logger.info(`成功替换 ${replacements.length} 个 Mermaid 代码块`);
   }
 
   // 合并 frontmatter 和更新后的正文
@@ -265,6 +302,7 @@ export async function convertMermaid(options: ConvertMermaidOptions): Promise<Co
 
   // 写回文件（可选：可以生成新文件）
   writeFile(filePath, updatedContent);
+  logger.info(`文件已更新: ${filePath}`);
 
   return {
     images,

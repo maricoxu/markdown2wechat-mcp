@@ -19,24 +19,29 @@ class Logger {
 
   debug(message: string, ...args: any[]): void {
     if (this.shouldLog("debug")) {
-      console.debug(`[DEBUG] ${message}`, ...args);
+      // MCP 服务器应该将日志输出到 stderr，而不是 stdout
+      // stdout 用于协议通信，stderr 用于日志
+      console.error(`[DEBUG] ${message}`, ...args);
     }
   }
 
   info(message: string, ...args: any[]): void {
     if (this.shouldLog("info")) {
-      console.info(`[INFO] ${message}`, ...args);
+      // MCP 服务器应该将日志输出到 stderr，而不是 stdout
+      console.error(`[INFO] ${message}`, ...args);
     }
   }
 
   warn(message: string, ...args: any[]): void {
     if (this.shouldLog("warn")) {
-      console.warn(`[WARN] ${message}`, ...args);
+      // MCP 服务器应该将日志输出到 stderr，而不是 stdout
+      console.error(`[WARN] ${message}`, ...args);
     }
   }
 
   error(message: string, ...args: any[]): void {
     if (this.shouldLog("error")) {
+      // MCP 服务器应该将日志输出到 stderr，而不是 stdout
       console.error(`[ERROR] ${message}`, ...args);
     }
   }
