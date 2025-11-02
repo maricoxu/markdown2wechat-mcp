@@ -1,7 +1,7 @@
 import { parseFrontMatter, mergeFrontMatter } from "../parser/frontmatter.js";
 import { readFile, writeFile, ensureDir, getFilenameWithoutExt } from "../utils/fs.js";
 import { executeCommand, isCommandAvailable } from "../utils/exec.js";
-import { resolve, dirname, join } from "path";
+import { resolve, dirname, join, basename } from "path";
 import { getConfig } from "../config/load.js";
 import { logger } from "../utils/log.js";
 import { convertSvgToHandDrawn, type HandDrawnOptions } from "./hand-drawn.js";
@@ -20,7 +20,8 @@ export interface MermaidImage {
  */
 export interface ConvertMermaidResult {
   images: MermaidImage[];
-  updatedMarkdownPath: string; // 更新后的 Markdown 文件路径
+  updatedMarkdownPath: string; // 新创建的转换后的 Markdown 文件路径（.converted.md）
+  originalMarkdownPath?: string; // 原文路径（可选，用于明确区分）
 }
 
 /**
@@ -115,9 +116,7 @@ async function renderWithLocal(
     const shouldApplyHandDrawn = options.handDrawn?.enabled && isHandDrawnSuitable(chartType);
     
     if (shouldApplyHandDrawn) {
-      logger.debug(`图表类型: ${chartType}，应用手绘风格`);
     } else if (options.handDrawn?.enabled && !isHandDrawnSuitable(chartType)) {
-      logger.info(`图表类型: ${chartType}，跳过手绘风格（该类型需要精确的视觉表示）`);
     }
 
     // 如果启用手绘风格且图表类型适合，先渲染为 SVG，然后转换
@@ -128,7 +127,6 @@ async function renderWithLocal(
       const svgCommand = `${commandPrefix} -i "${tempMermaidPath}" -o "${svgPath}" --outputFormat svg --scale ${options.scale} --backgroundColor "${options.background}"`;
       await executeCommand(svgCommand);
 
-      logger.info(`SVG 已生成，开始应用手绘风格...`);
 
       // 应用手绘风格并转换为目标格式
       await convertSvgToHandDrawn(svgPath, outputPath, {
@@ -136,6 +134,9 @@ async function renderWithLocal(
         roughness: options.handDrawn?.roughness,
         fillStyle: options.handDrawn?.fillStyle,
         finalFormat: options.format,
+        randomizeColors: options.handDrawn?.randomizeColors,
+        randomizeFillStyle: options.handDrawn?.randomizeFillStyle,
+        groupColorsByBlock: options.handDrawn?.groupColorsByBlock,
       });
     } else {
       // 直接渲染为 PNG/JPG（路径需要引号以处理空格和特殊字符）
@@ -205,7 +206,8 @@ export async function convertMermaid(options: ConvertMermaidOptions): Promise<Co
     logger.info("未找到 mermaid 代码块");
     return {
       images: [],
-      updatedMarkdownPath: filePath,
+      updatedMarkdownPath: filePath, // 如果没有代码块，返回原文路径
+      originalMarkdownPath: filePath,
     };
   }
 
@@ -246,12 +248,11 @@ export async function convertMermaid(options: ConvertMermaidOptions): Promise<Co
         // 注意：Kroki 不支持手绘风格（因为输出是 PNG）
       }
 
-      logger.info(`已渲染 mermaid 图表 ${i + 1}/${mermaidBlocks.length}: ${outputPath}`);
+      logger.debug(`已渲染 mermaid 图表 ${i + 1}/${mermaidBlocks.length}`);
 
       // 保存原始 Mermaid 代码到单独文件
       const mermaidBackupPath = join(mermaidBackupDir, `${filenameBase}__mmd_${i}.mmd`);
       writeFile(mermaidBackupPath, block.code);
-      logger.debug(`已保存原始 Mermaid 代码: ${mermaidBackupPath}`);
 
       // 构建图片引用路径（相对于 Markdown 文件）
       const relativePath = join(config.output.dir, outputFilename);
@@ -287,6 +288,7 @@ export async function convertMermaid(options: ConvertMermaidOptions): Promise<Co
   }
 
   // 第二步：从后往前替换（避免索引偏移问题）
+  // 注意：这里我们只修改 updatedBody，不修改原始 content
   if (replacements.length > 0) {
     replacements.sort((a, b) => b.startIndex - a.startIndex);
     for (const { startIndex, endIndex, replacement } of replacements) {
@@ -300,13 +302,25 @@ export async function convertMermaid(options: ConvertMermaidOptions): Promise<Co
   // 合并 frontmatter 和更新后的正文
   const updatedContent = mergeFrontMatter(frontmatter, updatedBody);
 
-  // 写回文件（可选：可以生成新文件）
-  writeFile(filePath, updatedContent);
-  logger.info(`文件已更新: ${filePath}`);
+  // 重要：始终创建新文件，绝不修改原文
+  // 原文路径：filePath
+  // 新文件路径：{原文件名}.converted.md
+  const outputFileDir = dirname(filePath);
+  const outputFilenameBase = getFilenameWithoutExt(filePath);
+  const outputFilePath = join(outputFileDir, `${outputFilenameBase}.converted.md`);
+  
+  // 确保不覆盖原文 - 明确检查
+  if (outputFilePath === filePath) {
+    throw new Error(`安全错误：不允许修改原文文件 ${filePath}。请检查输出文件路径生成逻辑。`);
+  }
+  
+  writeFile(outputFilePath, updatedContent);
+  logger.info(`已创建转换后的文档: ${basename(outputFilePath)}`);
 
   return {
     images,
-    updatedMarkdownPath: filePath,
+    updatedMarkdownPath: outputFilePath, // 返回新文件的路径（不是原文路径）
+    originalMarkdownPath: filePath, // 明确返回原文路径，便于区分
   };
 }
 

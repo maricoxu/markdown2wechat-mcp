@@ -1,0 +1,11 @@
+sequenceDiagram
+    participant U as 用户
+    participant S as 系统
+    participant C as COS
+    
+    U->>S: 请求发布文章
+    S->>S: 转换 Mermaid
+    S->>C: 上传图片
+    C-->>S: 返回 URL
+    S->>S: 替换链接
+    S-->>U: 发布成功

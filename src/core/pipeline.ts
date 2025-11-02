@@ -3,12 +3,14 @@ import { collectLocalImagesFromFile, type ImageInfo } from "../images/collect.js
 import { uploadImagesToCos, type CosUploadResult } from "../images/cos-uploader.js";
 import { rewriteImageLinksInFile } from "../images/rewrite-links.js";
 import { logger } from "../utils/log.js";
+import { basename } from "path";
 
 /**
  * Pipeline 执行上下文
  */
 export interface PipelineContext {
-  filePath: string;
+  filePath: string; // 最终文件的路径（可能是 .converted.md 或 .cos.md）
+  originalFilePath?: string; // 原文路径
   mermaidImages?: Array<{ index: number; alt?: string; localPath: string }>;
   collectedImages?: ImageInfo[];
   uploadResults?: CosUploadResult[];
@@ -35,37 +37,43 @@ export async function executePipeline(options: PipelineOptions): Promise<Pipelin
 
   const context: PipelineContext = {
     filePath,
+    originalFilePath: filePath, // 保存原文路径
     errors: [],
   };
 
   logger.info(`开始执行 Pipeline: ${filePath}`);
 
-  // 步骤 1: Mermaid 转图
+  // 当前处理的文件路径（会随着步骤更新）
+  let currentFilePath = filePath;
+
+  // 步骤 1: Mermaid 转图（创建 .converted.md 文件）
   if (shouldConvertMermaid) {
     try {
-      logger.info("步骤 1: 转换 Mermaid 代码块...");
+      logger.info("转换 Mermaid 代码块...");
       const mermaidResult = await convertMermaid({
-        filePath,
+        filePath: currentFilePath,
         ...mermaidOptions,
       });
       context.mermaidImages = mermaidResult.images;
-      logger.info(`已转换 ${mermaidResult.images.length} 个 Mermaid 图表，文件已更新`);
+      // 更新当前文件路径为转换后的文件
+      currentFilePath = mermaidResult.updatedMarkdownPath;
+      logger.info(`已转换 ${mermaidResult.images.length} 个 Mermaid 图表`);
     } catch (error: any) {
       logger.error(`Mermaid 转换失败: ${error.message}`);
       logger.error(`错误堆栈: ${error.stack}`);
       context.errors.push({ step: "convertMermaid", error });
     }
   } else {
-    logger.info("步骤 1: 跳过 Mermaid 转换（未启用 convertMermaid）");
   }
 
   // 步骤 2: 收集所有本地图片（包括 mermaid 生成的图片）
   if (shouldUploadImages) {
     try {
-      logger.info("步骤 2: 收集本地图片...");
-      const images = collectLocalImagesFromFile(filePath);
+      logger.info("收集本地图片...");
+      // 从当前文件路径收集图片（可能是原文或转换后的文件）
+      const images = collectLocalImagesFromFile(currentFilePath);
       context.collectedImages = images;
-      logger.info(`找到 ${images.length} 个本地图片`);
+      logger.info(`找到 ${images.length} 个图片`);
     } catch (error: any) {
       logger.error(`图片收集失败: ${error.message}`);
       context.errors.push({ step: "collectImages", error });
@@ -74,17 +82,19 @@ export async function executePipeline(options: PipelineOptions): Promise<Pipelin
     // 步骤 3: 上传图片到 COS
     if (context.collectedImages && context.collectedImages.length > 0) {
       try {
-        logger.info("步骤 3: 上传图片到 COS...");
+        logger.info("上传图片到 COS...");
         const localPaths = context.collectedImages.map((img) => img.localPath);
         const uploadResults = await uploadImagesToCos(localPaths, cosOptions);
         context.uploadResults = uploadResults;
-        logger.info(`成功上传 ${uploadResults.length} 个图片`);
 
-        // 步骤 4: 回写链接
+        // 步骤 4: 回写链接（创建 .cos.md 文件）
         try {
-          logger.info("步骤 4: 回写图片链接...");
-          rewriteImageLinksInFile(filePath, uploadResults);
-          logger.info("图片链接回写完成");
+          logger.info("回写图片链接...");
+          const previousFilePath = currentFilePath; // 保存转换前的路径
+          const rewriteResult = rewriteImageLinksInFile(currentFilePath, uploadResults, true);
+          // 更新当前文件路径为最终文件
+          currentFilePath = rewriteResult.outputPath;
+          logger.info(`已创建 COS 链接文档: ${basename(rewriteResult.outputPath)}`);
         } catch (error: any) {
           logger.error(`链接回写失败: ${error.message}`);
           context.errors.push({ step: "rewriteLinks", error });
@@ -96,10 +106,11 @@ export async function executePipeline(options: PipelineOptions): Promise<Pipelin
     }
   }
 
+  // 更新 context 中的文件路径为最终路径
+  context.filePath = currentFilePath;
+
   if (context.errors.length > 0) {
-    logger.warn(`Pipeline 执行完成，但有 ${context.errors.length} 个错误`);
-  } else {
-    logger.info("Pipeline 执行成功");
+    logger.warn(`Pipeline 完成，但有 ${context.errors.length} 个错误`);
   }
 
   return context;

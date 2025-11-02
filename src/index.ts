@@ -23,9 +23,12 @@ import { collectLocalImagesFromFile } from "./images/collect.js";
 import { uploadImagesToCos } from "./images/cos-uploader.js";
 import { rewriteImageLinksInFile } from "./images/rewrite-links.js";
 import { executePipeline } from "./core/pipeline.js";
-import { readFile } from "./utils/fs.js";
+import { readFile, getFilenameWithoutExt } from "./utils/fs.js";
 import { parseFrontMatterFromFile } from "./parser/frontmatter.js";
 import { getConfig } from "./config/load.js";
+import { logger } from "./utils/log.js";
+import { dirname, join } from "path";
+import { existsSync } from "fs";
 
 /**
  * Create an MCP server with capabilities for resources (to list/read notes),
@@ -105,6 +108,37 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
                             type: "string",
                             enum: ["local", "kroki"],
                             description: "Rendering engine (default: local)",
+                        },
+                        handDrawn: {
+                            type: "object",
+                            description: "Hand-drawn style options. Set enabled: true to enable hand-drawn style.",
+                            properties: {
+                                enabled: {
+                                    type: "boolean",
+                                    description: "Whether to enable hand-drawn style (default: false)",
+                                },
+                                roughness: {
+                                    type: "number",
+                                    description: "Roughness level (0-3, default: 1.5)",
+                                },
+                                fillStyle: {
+                                    type: "string",
+                                    enum: ["hachure", "cross-hatch", "zigzag", "solid"],
+                                    description: "Fill style (default: hachure)",
+                                },
+                                randomizeColors: {
+                                    type: "boolean",
+                                    description: "Randomize colors (default: true)",
+                                },
+                                randomizeFillStyle: {
+                                    type: "boolean",
+                                    description: "Randomize fill style (default: true)",
+                                },
+                                groupColorsByBlock: {
+                                    type: "boolean",
+                                    description: "Group colors by content block (default: true)",
+                                },
+                            },
                         },
                     },
                     required: ["filePath"],
@@ -218,6 +252,26 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             throw new Error("filePath is required");
         }
 
+        // 处理 handDrawn 参数
+        const handDrawnArg = request.params.arguments?.handDrawn as any;
+        let handDrawn: ConvertMermaidOptions["handDrawn"] = undefined;
+        
+        if (handDrawnArg) {
+            handDrawn = {
+                enabled: handDrawnArg.enabled === true || handDrawnArg.enabled === "true",
+                roughness: handDrawnArg.roughness !== undefined ? Number(handDrawnArg.roughness) : undefined,
+                fillStyle: handDrawnArg.fillStyle as any,
+                randomizeColors: handDrawnArg.randomizeColors !== undefined ? (handDrawnArg.randomizeColors === true || handDrawnArg.randomizeColors === "true") : undefined,
+                randomizeFillStyle: handDrawnArg.randomizeFillStyle !== undefined ? (handDrawnArg.randomizeFillStyle === true || handDrawnArg.randomizeFillStyle === "true") : undefined,
+                groupColorsByBlock: handDrawnArg.groupColorsByBlock !== undefined ? (handDrawnArg.groupColorsByBlock === true || handDrawnArg.groupColorsByBlock === "true") : undefined,
+            };
+            
+            // 如果 enabled 为 false，设置为 undefined 以使用配置默认值
+            if (!handDrawn.enabled) {
+                handDrawn = undefined;
+            }
+        }
+
         const options: ConvertMermaidOptions = {
             filePath,
             outDir: request.params.arguments?.outDir as string | undefined,
@@ -225,6 +279,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             scale: request.params.arguments?.scale as number | undefined,
             background: request.params.arguments?.background as string | undefined,
             engine: request.params.arguments?.engine as "local" | "kroki" | undefined,
+            handDrawn,
         };
 
         const result = await convertMermaid(options);
@@ -235,7 +290,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                     type: "text",
                     text: JSON.stringify({
                         images: result.images,
-                        updatedMarkdownPath: result.updatedMarkdownPath,
+                        updatedMarkdownPath: result.updatedMarkdownPath, // 新创建的转换文件路径（.converted.md）
+                        originalMarkdownPath: result.originalMarkdownPath || options.filePath, // 原文路径（未修改）
+                        note: "原文文件未被修改，已创建新文件: " + result.updatedMarkdownPath,
                     }),
                 },
             ],
@@ -246,8 +303,20 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             throw new Error("filePath is required");
         }
 
+        // 检查是否存在对应的 .converted.md 文件，如果存在则优先使用
+        const fileDir = dirname(filePath);
+        const filenameBase = getFilenameWithoutExt(filePath);
+        const convertedFilePath = join(fileDir, `${filenameBase}.converted.md`);
+        
+        // 优先使用 .converted.md 文件（如果存在）
+        let actualFilePath = filePath;
+        if (existsSync(convertedFilePath)) {
+            actualFilePath = convertedFilePath;
+            logger.debug(`使用 .converted.md 文件作为输入`);
+        }
+
         // 收集图片
-        const images = collectLocalImagesFromFile(filePath);
+        const images = collectLocalImagesFromFile(actualFilePath);
         
         if (images.length === 0) {
             return {
@@ -256,7 +325,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                         type: "text",
                         text: JSON.stringify({
                             uploaded: [],
-                            updatedMarkdownPath: filePath,
+                            updatedMarkdownPath: actualFilePath,
+                            note: actualFilePath !== filePath 
+                                ? `使用了 .converted.md 文件作为输入，但未找到需要上传的图片` 
+                                : `未找到需要上传的图片`,
                         }),
                     },
                 ],
@@ -270,8 +342,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             overwrite: request.params.arguments?.overwrite as boolean | undefined,
         });
 
-        // 回写链接
-        rewriteImageLinksInFile(filePath, uploadResults);
+        // 回写链接（创建新文件，不修改原文或 .converted.md）
+        const rewriteResult = rewriteImageLinksInFile(actualFilePath, uploadResults, true);
 
         return {
             content: [
@@ -279,7 +351,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                     type: "text",
                     text: JSON.stringify({
                         uploaded: uploadResults,
-                        updatedMarkdownPath: filePath,
+                        updatedMarkdownPath: rewriteResult.outputPath, // 返回新文件的路径（.cos.md）
+                        sourceFilePath: actualFilePath, // 实际使用的源文件（可能是原文或 .converted.md）
+                        originalMarkdownPath: filePath, // 保留原文路径信息
+                        note: actualFilePath !== filePath 
+                            ? `已使用 .converted.md 文件作为输入，创建了 .cos.md 文件` 
+                            : `已创建 .cos.md 文件`,
                     }),
                 },
             ],
@@ -298,16 +375,19 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         } | undefined;
 
         // 执行 Pipeline（如果启用）
+        let finalFilePath = filePath; // 最终用于发布的文件路径
         if (runPipeline?.convertMermaid || runPipeline?.uploadImages) {
-            await executePipeline({
+            const pipelineContext = await executePipeline({
                 filePath,
                 convertMermaid: runPipeline?.convertMermaid || false,
                 uploadImages: runPipeline?.uploadImages || false,
             });
+            // 使用 Pipeline 生成的文件路径（可能是 .converted.md 或 .cos.md）
+            finalFilePath = pipelineContext.filePath;
         }
 
-        // 读取更新后的内容
-        const content = readFile(filePath);
+        // 读取最终文件的内容（可能是原文、.converted.md 或 .cos.md）
+        const content = readFile(finalFilePath);
         
         // 预处理：解码图片路径中的URL编码
         let processedContent = content.replace(/!\[([^\]]*)\]\((.*?)\)/g, (match, alt, path) => {
@@ -321,7 +401,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
         // 使用原有逻辑发布
         const gzhContent = await getGzhContent(processedContent, themeId, "solarized-light", true, true);
-        const { frontmatter } = parseFrontMatterFromFile(filePath);
+        const { frontmatter } = parseFrontMatterFromFile(finalFilePath);
         const title = gzhContent.title || frontmatter.title || "Untitled";
         const cover = gzhContent.cover || frontmatter.cover || "";
         

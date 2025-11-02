@@ -1,0 +1,9 @@
+graph TD
+    A[开始] --> B{是否需要转换?}
+    B -->|是| C[检测 mermaid 代码块]
+    B -->|否| D[跳过]
+    C --> E[调用 mermaid-cli]
+    E --> F[生成 PNG 图片]
+    F --> G[替换为图片引用]
+    G --> H[完成]
+    D --> H

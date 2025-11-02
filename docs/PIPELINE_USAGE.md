@@ -6,11 +6,19 @@
 
 1. **Mermaid 转换**：自动检测并转换所有 Mermaid 代码块为 PNG 图片
 2. **代码备份**：保存原始 Mermaid 代码到 `.mermaid-backup` 目录
-3. **图片收集**：收集所有本地图片（包括 Mermaid 生成的图片）
-4. **COS 上传**：上传所有图片到腾讯云 COS
-5. **链接替换**：自动替换 Markdown 中的本地图片链接为 COS URL
-6. **主题渲染**：应用主题样式
-7. **发布到微信**：提交到微信公众号草稿箱
+3. **创建转换文档**：创建 `.converted.md` 文件（Mermaid 代码块已替换为图片链接，**原文保持不变**）
+4. **图片收集**：收集所有本地图片（包括 Mermaid 生成的图片）
+5. **COS 上传**：上传所有图片到腾讯云 COS
+6. **创建 COS 文档**：创建 `.cos.md` 文件（本地图片链接已替换为 COS URL，**上一步文档保持不变**）
+7. **主题渲染**：应用主题样式
+8. **发布到微信**：使用最终文档（`.cos.md`）提交到微信公众号草稿箱
+
+### 重要：文件保护机制
+
+**原文不会被修改**！所有转换操作都会创建新文件：
+- `文章.md`（原文）→ `文章.converted.md`（Mermaid 转换为图片）→ `文章.cos.md`（图片链接替换为 COS URL）
+- 每个步骤都会创建新文件，便于预览和确认效果
+- 最终发布到微信公众号使用的是最后一个文档（`.cos.md`）
 
 ## 使用方法
 
@@ -83,12 +91,14 @@ graph TD
 
 当调用 `publish_wechat` 并启用 Pipeline 后：
 
-1. **Mermaid 转换**：
+1. **Mermaid 转换**（创建 `article.converted.md`）：
    - 检测到 1 个 Mermaid 代码块
    - 转换为 `.assets/article__mmd_0.png`
    - 原始代码保存到 `.assets/.mermaid-backup/article__mmd_0.mmd`
+   - 创建新文件 `article.converted.md`（Mermaid 代码块已替换为图片链接）
+   - **原文 `article.md` 保持不变**
 
-2. **图片收集**：
+2. **图片收集**（从 `article.converted.md` 收集）：
    - 找到 2 个图片：
      - `.assets/article__mmd_0.png`（Mermaid 生成的）
      - `images/local.png`（原始本地图片）
@@ -97,7 +107,12 @@ graph TD
    - 上传到 `articles/2025/11/article__mmd_0.png`
    - 上传到 `articles/2025/11/local.png`
 
-4. **链接替换**：
+4. **链接替换**（创建 `article.cos.md`）：
+   - 创建新文件 `article.cos.md`（本地图片链接已替换为 COS URL）
+   - **`article.converted.md` 保持不变**
+
+5. **发布到微信**：
+   - 使用 `article.cos.md` 文件发布
    - 原文中的 Mermaid 代码块被替换为：
      ```markdown
      ![mermaid-1](https://your-cos-url.com/articles/2025/11/article__mmd_0.png)

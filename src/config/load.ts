@@ -7,6 +7,7 @@ import { ConfigSchema, type Config } from "./schema.js";
 /**
  * 加载环境变量
  * 优先查找项目根目录的 .env 文件
+ * 注意：MCP 服务器需要静默加载，避免 dotenv 输出到 stdout
  */
 function loadEnv(): void {
   const __filename = fileURLToPath(import.meta.url);
@@ -14,11 +15,33 @@ function loadEnv(): void {
   const projectRoot = resolve(__dirname, "../..");
   const envPath = resolve(projectRoot, ".env");
   
-  if (existsSync(envPath)) {
-    config({ path: envPath });
-  } else {
-    // 也尝试从当前工作目录加载
-    config();
+  // 静默加载环境变量，避免输出到 stdout（会干扰 MCP 协议通信）
+  // dotenv 17.x 默认会输出提示信息，使用 DOTENV_CONFIG_QUIET 环境变量静默输出
+  // 临时设置环境变量，然后恢复
+  const originalQuiet = process.env.DOTENV_CONFIG_QUIET;
+  process.env.DOTENV_CONFIG_QUIET = 'true';
+  
+  try {
+    if (existsSync(envPath)) {
+      config({ 
+        path: envPath,
+        debug: false,  // 禁用调试输出
+        override: false,  // 不覆盖已存在的环境变量
+      });
+    } else {
+      // 也尝试从当前工作目录加载（静默）
+      config({
+        debug: false,
+        override: false,
+      });
+    }
+  } finally {
+    // 恢复原始 DOTENV_CONFIG_QUIET 设置
+    if (originalQuiet === undefined) {
+      delete process.env.DOTENV_CONFIG_QUIET;
+    } else {
+      process.env.DOTENV_CONFIG_QUIET = originalQuiet;
+    }
   }
 }
 
@@ -36,7 +59,8 @@ function loadConfigJson(): Partial<Config> {
       const content = readFileSync(configPath, "utf-8");
       return JSON.parse(content);
     } catch (error) {
-      console.warn(`Failed to parse config.json: ${error}`);
+      // 使用 stderr 输出警告，避免干扰 MCP 协议
+      console.error(`[WARN] Failed to parse config.json: ${error}`);
       return {};
     }
   }
@@ -122,13 +146,19 @@ function buildConfigFromEnv(): Partial<Config> {
   return config;
 }
 
+// 环境变量加载标志，确保只加载一次
+let envLoaded = false;
+
 /**
  * 加载并验证配置
  * 合并优先级：环境变量 > config.json > 默认值
  */
 export function loadConfig(): Config {
-  // 1. 加载 .env 文件
-  loadEnv();
+  // 1. 加载 .env 文件（只加载一次）
+  if (!envLoaded) {
+    loadEnv();
+    envLoaded = true;
+  }
 
   // 2. 加载 config.json
   const jsonConfig = loadConfigJson();
