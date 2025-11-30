@@ -38,6 +38,34 @@ describe("图片收集", () => {
 
     expect(images.length).toBe(0);
   });
+
+  it("应该收集 Frontmatter 中的封面图片", () => {
+    const testDir = join(tmpdir(), "cover-test");
+    const coverImagePath = join(testDir, "cover.jpg");
+    const { writeFile, ensureDir } = require("../src/utils/fs.js");
+    const { existsSync } = require("fs");
+    
+    ensureDir(testDir);
+    writeFile(coverImagePath, "fake cover");
+
+    const markdown = `---
+title: 测试
+cover: ${coverImagePath}
+---
+
+# 正文`;
+
+    const markdownPath = join(testDir, "test.md");
+    writeFile(markdownPath, markdown);
+
+    const images = collectLocalImages(markdown, markdownPath);
+
+    if (existsSync(coverImagePath)) {
+      const coverImage = images.find(img => img.type === 'cover');
+      expect(coverImage).toBeDefined();
+      expect(coverImage?.type).toBe('cover');
+    }
+  });
 });
 
 

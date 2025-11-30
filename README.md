@@ -24,6 +24,34 @@ https://github.com/user-attachments/assets/2c355f76-f313-48a7-9c31-f0f69e5ec207
 
 - [让AI帮你管理公众号的排版和发布](https://babyno.top/posts/2025/06/let-ai-help-you-manage-your-gzh-layout-and-publishing/)
 
+## 快速开始
+
+### 必需配置
+
+在 MCP 配置文件中（如 `~/.cursor/mcp.json`）添加以下环境变量：
+
+```json
+{
+  "mcpServers": {
+    "wenyan-mcp": {
+      "command": "node",
+      "args": ["/path/to/markdown2wechat-mcp/dist/index.js"],
+      "env": {
+        "WECHAT_APP_ID": "your_wechat_app_id",
+        "WECHAT_APP_SECRET": "your_wechat_app_secret",
+        "COS_SECRET_ID": "your_cos_secret_id",
+        "COS_SECRET_KEY": "your_cos_secret_key",
+        "COS_REGION": "ap-shanghai",
+        "COS_BUCKET": "your_bucket_name",
+        "COS_BASE_URL": "https://your-bucket-name-APPID.cos.region.myqcloud.com"
+      }
+    }
+  }
+}
+```
+
+> 📖 **详细配置说明**：请查看下方的 [安装与配置](#安装与配置) 部分
+
 ## 功能
 
 - ✅ 列出并选择支持的文章主题
@@ -190,22 +218,45 @@ npm install -g @wenyan-md/mcp
 ```json
 {
   "mcpServers": {
-    "markdown2wechat": {
+    "wenyan-mcp": {
       "name": "公众号助手",
-      "command": "wenyan-mcp",
+      "command": "node",
+      "args": [
+        "/path/to/markdown2wechat-mcp/dist/index.js"
+      ],
+      "disabled": false,
+      "autoApprove": true,
+      "description": "📝 文颜 MCP - Fork版本，支持Markdown文章发布到微信公众号",
       "env": {
-        "WECHAT_APP_ID": "your_app_id",
-        "WECHAT_APP_SECRET": "your_app_secret"
+        "WECHAT_APP_ID": "your_wechat_app_id",
+        "WECHAT_APP_SECRET": "your_wechat_app_secret",
+        "COS_SECRET_ID": "your_cos_secret_id",
+        "COS_SECRET_KEY": "your_cos_secret_key",
+        "COS_REGION": "ap-shanghai",
+        "COS_BUCKET": "your_bucket_name",
+        "COS_BASE_URL": "https://your-bucket-name-APPID.cos.region.myqcloud.com"
       }
     }
   }
 }
 ```
 
-> 说明：
+> **配置说明**：
 >
-> * `WECHAT_APP_ID` 微信公众号平台的 App ID
-> * `WECHAT_APP_SECRET` 微信平台的 App Secret
+> **微信公众号配置**（必需）：
+> * `WECHAT_APP_ID` - 微信公众号平台的 App ID
+> * `WECHAT_APP_SECRET` - 微信平台的 App Secret
+>
+> **腾讯云 COS 配置**（图片上传功能需要）：
+> * `COS_SECRET_ID` - 腾讯云 API 密钥 SecretId
+> * `COS_SECRET_KEY` - 腾讯云 API 密钥 SecretKey
+> * `COS_REGION` - 存储桶所属地域（如：`ap-shanghai`、`ap-guangzhou`）
+> * `COS_BUCKET` - 存储桶名称
+> * `COS_BASE_URL` - 存储桶访问地址（格式：`https://bucket-name-APPID.cos.region.myqcloud.com`）
+>
+> **获取配置信息**：
+> - 微信公众号配置：在[微信公众平台](https://mp.weixin.qq.com/)的"开发"→"基本配置"中获取
+> - COS 配置：参考 [COS 配置步骤说明](COS配置步骤说明.md) 或 [COS 配置指南](docs/COS_SETUP_GUIDE.md)
 
 ---
 
@@ -336,18 +387,35 @@ npm run build
         "Your/path/to/wenyan-mcp/dist/index.js"
       ],
       "env": {
-        "WECHAT_APP_ID": "your_app_id",
-        "WECHAT_APP_SECRET": "your_app_secret"
+        "WECHAT_APP_ID": "your_wechat_app_id",
+        "WECHAT_APP_SECRET": "your_wechat_app_secret",
+        "COS_SECRET_ID": "your_cos_secret_id",
+        "COS_SECRET_KEY": "your_cos_secret_key",
+        "COS_REGION": "ap-shanghai",
+        "COS_BUCKET": "your_bucket_name",
+        "COS_BASE_URL": "https://your-bucket-name-APPID.cos.region.myqcloud.com"
       }
     }
   }
 }
 ```
 
-> 说明：
+> **配置说明**：
 >
-> * `WECHAT_APP_ID` 微信公众号平台的 App ID
-> * `WECHAT_APP_SECRET` 微信平台的 App Secret
+> **微信公众号配置**（必需）：
+> * `WECHAT_APP_ID` - 微信公众号平台的 App ID
+> * `WECHAT_APP_SECRET` - 微信平台的 App Secret
+>
+> **腾讯云 COS 配置**（图片上传功能需要）：
+> * `COS_SECRET_ID` - 腾讯云 API 密钥 SecretId
+> * `COS_SECRET_KEY` - 腾讯云 API 密钥 SecretKey
+> * `COS_REGION` - 存储桶所属地域（如：`ap-shanghai`、`ap-guangzhou`）
+> * `COS_BUCKET` - 存储桶名称
+> * `COS_BASE_URL` - 存储桶访问地址（格式：`https://bucket-name-APPID.cos.region.myqcloud.com`）
+>
+> **获取配置信息**：
+> - 微信公众号配置：在[微信公众平台](https://mp.weixin.qq.com/)的"开发"→"基本配置"中获取
+> - COS 配置：参考 [COS 配置步骤说明](COS配置步骤说明.md) 或 [COS 配置指南](docs/COS_SETUP_GUIDE.md)
 
 ---
 
@@ -382,8 +450,13 @@ docker build --build-arg NPM_REGISTRY=https://mirrors.cloud.tencent.com/npm/ -t 
         "--rm",
         "-i",
         "-v", "/your/host/image/path:/mnt/host-downloads",
-        "-e", "WECHAT_APP_ID=your_app_id",
-        "-e", "WECHAT_APP_SECRET=your_app_secret",
+        "-e", "WECHAT_APP_ID=your_wechat_app_id",
+        "-e", "WECHAT_APP_SECRET=your_wechat_app_secret",
+        "-e", "COS_SECRET_ID=your_cos_secret_id",
+        "-e", "COS_SECRET_KEY=your_cos_secret_key",
+        "-e", "COS_REGION=ap-shanghai",
+        "-e", "COS_BUCKET=your_bucket_name",
+        "-e", "COS_BASE_URL=https://your-bucket-name-APPID.cos.region.myqcloud.com",
         "-e", "HOST_IMAGE_PATH=/your/host/image/path",
         "markdown2wechat-mcp"
       ]
@@ -396,9 +469,16 @@ docker build --build-arg NPM_REGISTRY=https://mirrors.cloud.tencent.com/npm/ -t 
 >
 > * `-v` 挂载宿主机目录，使容器内部可以访问本地图片。与环境变量`HOST_IMAGE_PATH`保持一致。你的 `Markdown` 文章内的本地图片应该都放置在该目录中，docker会自动将它们映射到容器内。容器无法读取在该目录以外的图片。
 > * `-e` 注入docker容器的环境变量：
-> * `WECHAT_APP_ID` 微信公众号平台的 App ID
-> * `WECHAT_APP_SECRET` 微信平台的 App Secret
-> * `HOST_IMAGE_PATH` 宿主机图片目录
+> * **微信公众号配置**（必需）：
+>   * `WECHAT_APP_ID` - 微信公众号平台的 App ID
+>   * `WECHAT_APP_SECRET` - 微信平台的 App Secret
+> * **腾讯云 COS 配置**（图片上传功能需要）：
+>   * `COS_SECRET_ID` - 腾讯云 API 密钥 SecretId
+>   * `COS_SECRET_KEY` - 腾讯云 API 密钥 SecretKey
+>   * `COS_REGION` - 存储桶所属地域（如：`ap-shanghai`、`ap-guangzhou`）
+>   * `COS_BUCKET` - 存储桶名称
+>   * `COS_BASE_URL` - 存储桶访问地址
+> * `HOST_IMAGE_PATH` - 宿主机图片目录
 
 ---
 
@@ -410,15 +490,15 @@ docker build --build-arg NPM_REGISTRY=https://mirrors.cloud.tencent.com/npm/ -t 
 
 ```env
 # 微信公众号配置（必需）
-WECHAT_APP_ID=your_app_id
-WECHAT_APP_SECRET=your_app_secret
+WECHAT_APP_ID=your_wechat_app_id
+WECHAT_APP_SECRET=your_wechat_app_secret
 
-# 腾讯云 COS 配置（图片上传功能需要，可选）
+# 腾讯云 COS 配置（图片上传功能需要）
 COS_SECRET_ID=your_cos_secret_id
 COS_SECRET_KEY=your_cos_secret_key
-COS_REGION=ap-guangzhou
+COS_REGION=ap-shanghai
 COS_BUCKET=your_bucket_name
-COS_BASE_URL=https://your-bucket.cos.region.myqcloud.com
+COS_BASE_URL=https://your-bucket-name-APPID.cos.region.myqcloud.com
 
 # Mermaid 配置（可选）
 MERMAID_ENGINE=local

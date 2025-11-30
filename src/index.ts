@@ -19,7 +19,7 @@ import { getGzhContent } from "@wenyan-md/core/wrapper";
 import { publishToDraft } from "@wenyan-md/core/publish";
 import { themes, Theme } from "@wenyan-md/core/theme";
 import { convertMermaid, type ConvertMermaidOptions } from "./mermaid/renderer.js";
-import { collectLocalImagesFromFile } from "./images/collect.js";
+import { collectLocalImagesFromFile, type ImageInfo } from "./images/collect.js";
 import { uploadImagesToCos } from "./images/cos-uploader.js";
 import { rewriteImageLinksInFile } from "./images/rewrite-links.js";
 import { executePipeline } from "./core/pipeline.js";
@@ -27,7 +27,9 @@ import { readFile, getFilenameWithoutExt } from "./utils/fs.js";
 import { parseFrontMatterFromFile } from "./parser/frontmatter.js";
 import { getConfig } from "./config/load.js";
 import { logger } from "./utils/log.js";
-import { dirname, join } from "path";
+import { dirname, join, basename } from "path";
+import { validateUrls } from "./utils/url-validator.js";
+import { CosUploadResult } from "./images/cos-uploader.js";
 import { existsSync } from "fs";
 
 /**
@@ -372,21 +374,169 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const runPipeline = request.params.arguments?.runPipeline as {
             convertMermaid?: boolean;
             uploadImages?: boolean;
+            mermaidOptions?: any; // 支持传递 Mermaid 选项（如手绘风格）
         } | undefined;
 
-        // 执行 Pipeline（如果启用）
+        // 步骤 1: 先执行图片上传（如果启用）
         let finalFilePath = filePath; // 最终用于发布的文件路径
-        if (runPipeline?.convertMermaid || runPipeline?.uploadImages) {
-            const pipelineContext = await executePipeline({
+        let pipelineContext: any = null;
+        
+        if (runPipeline?.uploadImages) {
+            logger.info("[发布] ========================================");
+            logger.info("[发布] 📤 步骤 1: 上传图片到 COS");
+            logger.info("[发布] ========================================");
+            
+            // 处理 Mermaid 选项（包括手绘风格）
+            let mermaidOptions: any = undefined;
+            if (runPipeline.mermaidOptions) {
+                mermaidOptions = runPipeline.mermaidOptions;
+            } else if (runPipeline?.convertMermaid) {
+                // 如果启用了 Mermaid 转换但没有指定选项，使用配置中的默认值
+                mermaidOptions = config.mermaid ? {
+                    engine: config.mermaid.engine,
+                    scale: config.mermaid.scale,
+                    background: config.mermaid.background,
+                    format: config.mermaid.format,
+                    handDrawn: config.mermaid.handDrawn,
+                } : undefined;
+            }
+            
+            pipelineContext = await executePipeline({
                 filePath,
                 convertMermaid: runPipeline?.convertMermaid || false,
-                uploadImages: runPipeline?.uploadImages || false,
+                uploadImages: true, // 强制启用上传
+                mermaidOptions,
             });
+            
+            // 检查上传结果
+            const collectedImagesCount = pipelineContext.collectedImages?.length || 0;
+            const uploadResultsCount = pipelineContext.uploadResults?.length || 0;
+            const uploadErrors = pipelineContext.errors.filter((e: any) => e.step === "uploadImages");
+            
+            logger.info("[发布] ========================================");
+            logger.info("[发布] 📊 上传结果统计:");
+            logger.info(`[发布]   - 需要上传的图片数: ${collectedImagesCount}`);
+            logger.info(`[发布]   - 成功上传的图片数: ${uploadResultsCount}`);
+            logger.info(`[发布]   - 上传失败的图片数: ${collectedImagesCount - uploadResultsCount}`);
+            logger.info("[发布] ========================================");
+            
+            // 分析上传结果
+            if (collectedImagesCount === 0) {
+                logger.warn("[发布] ⚠️ 没有找到需要上传的图片");
+            } else if (uploadResultsCount < collectedImagesCount) {
+                // 有图片上传失败，分析原因并停止发布
+                const failedCount = collectedImagesCount - uploadResultsCount;
+                logger.error(`[发布] ❌ 图片上传失败！共有 ${failedCount} 个图片上传失败`);
+                
+                // 找出失败的图片
+                const uploadedPaths = new Set(pipelineContext.uploadResults?.map((r: CosUploadResult) => r.localPath) || []);
+                const failedImages = pipelineContext.collectedImages?.filter((img: ImageInfo) => !uploadedPaths.has(img.localPath)) || [];
+                
+                logger.error(`[发布] 📋 失败的图片列表:`);
+                failedImages.forEach((img: ImageInfo, idx: number) => {
+                    logger.error(`[发布]   ${idx + 1}. ${basename(img.localPath)}`);
+                    logger.error(`[发布]      路径: ${img.localPath}`);
+                });
+                
+                // 分析失败原因
+                logger.error(`[发布] 🔍 失败原因分析:`);
+                if (uploadErrors.length > 0) {
+                    uploadErrors.forEach((errorInfo: any, idx: number) => {
+                        logger.error(`[发布]   错误 ${idx + 1}: ${errorInfo.error.message}`);
+                        if (errorInfo.error.message.includes("403")) {
+                            logger.error(`[发布]   💡 诊断: 权限问题`);
+                            logger.error(`[发布]      - 检查 SecretId 和 SecretKey 是否正确`);
+                            logger.error(`[发布]      - 检查存储桶访问权限是否允许写入`);
+                            logger.error(`[发布]      - 检查是否配置了 IP 白名单`);
+                        } else if (errorInfo.error.message.includes("404")) {
+                            logger.error(`[发布]   💡 诊断: 存储桶不存在或区域不正确`);
+                            logger.error(`[发布]      - 检查 Bucket 名称是否正确`);
+                            logger.error(`[发布]      - 检查 Region 是否正确`);
+                        } else if (errorInfo.error.message.includes("400")) {
+                            logger.error(`[发布]   💡 诊断: 请求参数错误`);
+                            logger.error(`[发布]      - 检查 COS Key 格式是否正确`);
+                            logger.error(`[发布]      - 检查文件大小是否超过限制`);
+                        } else {
+                            logger.error(`[发布]   💡 诊断: ${errorInfo.error.message}`);
+                        }
+                    });
+                } else {
+                    logger.error(`[发布]   💡 可能的原因:`);
+                    logger.error(`[发布]      - 网络连接问题`);
+                    logger.error(`[发布]      - COS 服务暂时不可用`);
+                    logger.error(`[发布]      - 文件路径或权限问题`);
+                }
+                
+                throw new Error(`图片上传失败: ${failedCount}/${collectedImagesCount} 个图片上传失败，无法继续发布。请查看上方日志了解详细错误信息。`);
+            } else {
+                logger.info(`[发布] ✅ 所有图片上传成功！(${uploadResultsCount}/${collectedImagesCount})`);
+                
+                // 验证 URL 可访问性（用于诊断）
+                if (pipelineContext.uploadResults && pipelineContext.uploadResults.length > 0) {
+                    logger.info("[发布] 🔍 验证 COS URL 可访问性...");
+                    const cosUrls = pipelineContext.uploadResults.map((r: CosUploadResult) => r.url);
+                    const urlValidationResults = await validateUrls(cosUrls, 5000);
+                    
+                    const validUrls: string[] = [];
+                    const invalidUrls: string[] = [];
+                    urlValidationResults.forEach((isValid, url) => {
+                        if (isValid) {
+                            validUrls.push(url);
+                        } else {
+                            invalidUrls.push(url);
+                        }
+                    });
+                    
+                    logger.info(`[发布] 📊 URL 验证结果:`);
+                    logger.info(`[发布]   - 可访问: ${validUrls.length}/${cosUrls.length}`);
+                    logger.info(`[发布]   - 不可访问: ${invalidUrls.length}/${cosUrls.length}`);
+                    
+                    if (invalidUrls.length > 0) {
+                        logger.error(`[发布] ❌ 以下 COS URL 无法访问（虽然上传已成功）:`);
+                        invalidUrls.forEach((url, idx) => {
+                            const result = pipelineContext.uploadResults.find((r: CosUploadResult) => r.url === url);
+                            logger.error(`[发布]   ${idx + 1}. ${result ? basename(result.localPath) : '未知文件'}`);
+                            logger.error(`[发布]      URL: ${url}`);
+                            logger.error(`[发布]      Key: ${result ? result.cosKey : 'N/A'}`);
+                        });
+                        logger.error(`[发布] 🔍 失败原因分析:`);
+                        logger.error(`[发布]   💡 可能的原因:`);
+                        logger.error(`[发布]      1. 存储桶访问权限未设置为"公有读私有写"`);
+                        logger.error(`[发布]      2. COS URL 生成不正确（Base URL + Key）`);
+                        logger.error(`[发布]      3. 网络连接问题`);
+                        logger.error(`[发布]      4. CDN 缓存延迟（文件刚上传，需要等待几秒钟）`);
+                        logger.error(`[发布]      5. URL 编码问题`);
+                        logger.error(`[发布]   💡 建议操作:`);
+                        logger.error(`[发布]      1. 检查存储桶访问权限设置`);
+                        logger.error(`[发布]      2. 手动在浏览器中访问 URL 确认文件是否存在`);
+                        logger.error(`[发布]      3. 检查 COS 配置（Base URL、Bucket、Region）`);
+                        logger.error(`[发布]      4. 等待几秒钟后重试（如果是 CDN 缓存问题）`);
+                        logger.error(`[发布] ❌ 由于 COS URL 无法访问，无法继续发布。`);
+                        logger.error(`[发布]     getGzhContent 函数需要下载图片，但 URL 无法访问会导致发布失败。`);
+                        throw new Error(`COS URL 无法访问: ${invalidUrls.length}/${cosUrls.length} 个 URL 无法访问。虽然文件已上传成功，但生成的 URL 无法访问，无法继续发布。请查看上方日志了解详细信息和解决建议。`);
+                    } else {
+                        logger.info(`[发布] ✅ 所有 COS URL 验证通过！`);
+                    }
+                }
+            }
+            
             // 使用 Pipeline 生成的文件路径（可能是 .converted.md 或 .cos.md）
+            finalFilePath = pipelineContext.filePath;
+        } else if (runPipeline?.convertMermaid) {
+            // 只转换 Mermaid，不上传图片
+            pipelineContext = await executePipeline({
+                filePath,
+                convertMermaid: true,
+                uploadImages: false,
+            });
             finalFilePath = pipelineContext.filePath;
         }
 
-        // 读取最终文件的内容（可能是原文、.converted.md 或 .cos.md）
+        // 步骤 2: 读取最终文件的内容并发布到微信公众号
+        logger.info("[发布] ========================================");
+        logger.info("[发布] 📝 步骤 2: 发布到微信公众号");
+        logger.info("[发布] ========================================");
+        
         const content = readFile(finalFilePath);
         
         // 预处理：解码图片路径中的URL编码
@@ -442,11 +592,38 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
  * This allows the server to communicate via standard input/output streams.
  */
 async function main() {
-    const transport = new StdioServerTransport();
-    await server.connect(transport);
+    try {
+        const transport = new StdioServerTransport();
+        await server.connect(transport);
+        // 服务器连接成功后，会持续运行等待请求
+    } catch (error: any) {
+        // 使用 stderr 输出错误，避免干扰 MCP 协议通信
+        console.error("[wenyan-mcp] Server startup error:", error?.message || error);
+        if (error?.stack) {
+            console.error("[wenyan-mcp] Stack trace:", error.stack);
+        }
+        process.exit(1);
+    }
 }
 
+// 捕获未处理的异常
+process.on('uncaughtException', (error) => {
+    console.error("[wenyan-mcp] Uncaught exception:", error.message);
+    if (error.stack) {
+        console.error("[wenyan-mcp] Stack trace:", error.stack);
+    }
+    process.exit(1);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+    console.error("[wenyan-mcp] Unhandled rejection:", reason);
+    process.exit(1);
+});
+
 main().catch((error) => {
-    console.error("Server error:", error);
+    console.error("[wenyan-mcp] Main function error:", error?.message || error);
+    if (error?.stack) {
+        console.error("[wenyan-mcp] Stack trace:", error.stack);
+    }
     process.exit(1);
 });
